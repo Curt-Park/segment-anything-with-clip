@@ -1,0 +1,41 @@
+name: Tests for Python Scripts
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  format-lint:
+    runs-on: ubuntu-18.04
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: conda-incubator/setup-miniconda@v2
+      with:
+        python-version: 3.8
+
+    - run: make setup
+    - run: conda info
+    - run: conda list
+    - run: make format
+    - run: make lint
+
+  unit-test:
+    runs-on: ubuntu-18.04
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: conda-incubator/setup-miniconda@v2
+      with:
+        python-version: 3.8
+
+    - run: make setup
+    - run: conda info
+    - run: conda list
+    - run: make utest

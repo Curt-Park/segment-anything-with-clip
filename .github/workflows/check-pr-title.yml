@@ -1,0 +1,16 @@
+name: Checks Pull-Request titles
+
+on:
+  pull_request:
+    branches: [ main ]
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  title-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: deepakputhraya/action-pr-title@master
+        with:
+          min_length: 6 # Min length of the title
+          max_length: 72 # Max length of the title
+          github_token: ${{ github.token }} # Default: ${{ github.token }}

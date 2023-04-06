@@ -1,0 +1,21 @@
+pre-commit == 2.17.0
+
+# formatter
+isort == 5.10.1                 # imports
+black == 22.3.0                 # coding style
+
+# linter
+pylint              == 2.12.2   # python static code analysis
+mypy                == 0.931    # type check
+flake8              == 3.8.4    # PyFlakes + pycodestyle + Ned Batchelder’s McCabe script
+flake8-docstrings   == 1.6.0    # pydocstyle tool to flake8
+flake8-annotations  == 2.7.0    # PEP 3107-style function annotations
+flake8-builtins     == 1.5.3    # check python builtins being used as variables or parameters
+flake8-bugbear      == 22.1.11  # find likely bugs and design problems
+
+# pytest for linting and unit test
+pytest          == 6.2.5
+pytest-pylint   == 0.18.0
+pytest-flake8   == 1.0.7
+pytest-mypy     == 0.8.0
+pytest-cov      == 3.0.0        # coverage reports
