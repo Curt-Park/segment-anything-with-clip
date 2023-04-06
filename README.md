@@ -2,7 +2,7 @@
 [[HuggingFace Space](https://huggingface.co/spaces/curt-park/segment-anything-with-clip)] | [[COLAB](https://colab.research.google.com/github/Curt-Park/segment-anything-with-clip/blob/main/colab.ipynb)] | [[Demo Video](https://youtu.be/vM7MfAc3BdQ)]
 
 Meta released [a new foundation model for segmentation tasks](https://ai.facebook.com/blog/segment-anything-foundation-model-image-segmentation/).
-It aims to resolve downstream segmentation tasks with prompt engineering, such as forground / background points, bounding box, mask, free-formed text.
+It aims to resolve downstream segmentation tasks with prompt engineering, such as foreground/background points, bounding box, mask, and free-formed text.
 However, the text prompt is not released yet.
 
 Alternatively, I took the following steps:
