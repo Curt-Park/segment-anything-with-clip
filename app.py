@@ -1,4 +1,5 @@
 import os
+import urllib
 from functools import lru_cache
 from random import randint
 from typing import Any, Callable, Dict, List, Tuple
@@ -12,6 +13,7 @@ import torch
 from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 
 CHECKPOINT_PATH = "sam_vit_h_4b8939.pth"
+CHECKPOINT_URL = "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth"
 MODEL_TYPE = "default"
 MAX_WIDTH = MAX_HEIGHT = 800
 CLIP_WIDTH = CLIP_HEIGHT = 300
@@ -21,6 +23,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 @lru_cache
 def load_mask_generator() -> SamAutomaticMaskGenerator:
+    if not os.path.exists(os.path.join(".", CHECKPOINT_PATH)):
+        urllib.request.urlretrieve(CHECKPOINT_URL, CHECKPOINT_PATH)
     sam = sam_model_registry[MODEL_TYPE](checkpoint=CHECKPOINT_PATH).to(device)
     mask_generator = SamAutomaticMaskGenerator(sam)
     return mask_generator
@@ -28,10 +32,9 @@ def load_mask_generator() -> SamAutomaticMaskGenerator:
 
 @lru_cache
 def load_clip(
-    name: str = "ViT-B-32.pt",
+    name: str = "ViT-B/32",
 ) -> Tuple[torch.nn.Module, Callable[[PIL.Image.Image], torch.Tensor]]:
-    model_path = os.path.join(".", name)
-    model, preprocess = clip.load(model_path, device=device)
+    model, preprocess = clip.load(name, device=device)
     return model.to(device), preprocess
 
 
