@@ -1,5 +1,6 @@
 # Segment Anything with Clip
-[HuggingFace Space](https://huggingface.co/spaces/curt-park/segment-anything-with-clip) | [COLAB]()
+[[HuggingFace Space](https://huggingface.co/spaces/curt-park/segment-anything-with-clip)] | [[COLAB]()]
+
 Meta released a new foundation model for segmentation tasks.
 It aims to resolve downstream segmentation tasks with prompt engineering, such as forground / background points, bounding box, mask, free-formed text.
 However, the text prompt is not released yet.
@@ -30,6 +31,9 @@ make setup
 # this executes GRadio server.
 make run
 ```
+Open http://localhost:7860/
+<img width="1270" alt="" src="https://user-images.githubusercontent.com/14961526/230437084-79ef6e02-a254-421e-bd4c-32e87415c623.png">
+
 
 ## References
 - https://github.com/facebookresearch/segment-anything
