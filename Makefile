@@ -1,12 +1,17 @@
 PYTHON=3.8
 BASENAME=$(shell basename $(CURDIR))
-CONDA_CH=conda-forge defaults
 
 env:
 	conda create -n $(BASENAME)  python=$(PYTHON)
 
 setup:
-	conda install --file requirements.txt $(addprefix -c ,$(CONDA_CH))
+	pip install -r requirements.txt
+
+run:
+	gradio app.py
+
+setup-dev:
+	pip install -r requirements-dev.txt
 	pre-commit install
 
 format:
@@ -14,10 +19,4 @@ format:
 	isort .
 
 lint:
-	pytest src --flake8 --pylint --mypy
-
-utest:
-	PYTHONPATH=src pytest test/utest --cov=src --cov-report=html --cov-report=term --cov-config=setup.cfg
-
-cov:
-	open htmlcov/index.html
+	flake8 .

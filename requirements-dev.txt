@@ -1,0 +1,8 @@
+pre-commit == 2.17.0
+
+# formatter
+isort == 5.10.1                 # imports
+black == 22.3.0                 # coding style
+
+# linter
+flake8              == 3.8.4    # PyFlakes + pycodestyle + Ned Batchelder’s McCabe script
