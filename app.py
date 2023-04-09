@@ -16,7 +16,6 @@ CHECKPOINT_PATH = "sam_vit_h_4b8939.pth"
 CHECKPOINT_URL = "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth"
 MODEL_TYPE = "default"
 MAX_WIDTH = MAX_HEIGHT = 800
-CLIP_WIDTH = CLIP_HEIGHT = 300
 THRESHOLD = 0.05
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -60,8 +59,8 @@ def get_scores(crops: List[PIL.Image.Image], query: str) -> torch.Tensor:
     txt_features = model.encode_text(token)
     img_features /= img_features.norm(dim=-1, keepdim=True)
     txt_features /= txt_features.norm(dim=-1, keepdim=True)
-    probs = 100.0 * img_features @ txt_features.T
-    return probs[:, 0].softmax(dim=0)
+    similarity = (100 * img_features @ txt_features.T).softmax(0)
+    return similarity
 
 
 def filter_masks(
@@ -85,10 +84,10 @@ def filter_masks(
         filtered_masks.append(mask)
 
         x, y, w, h = mask["bbox"]
-        crop = image[y : y + h, x : x + w]
+        masked = image * np.expand_dims(mask["segmentation"], -1)
+        crop = masked[y: y + h, x: x + w]
         crop = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
-        crop = PIL.Image.fromarray(np.uint8(crop * 255)).convert("RGB")
-        crop.resize((CLIP_WIDTH, CLIP_HEIGHT))
+        crop = PIL.Image.fromarray(crop)
         cropped_masks.append(crop)
 
     if query and filtered_masks:
@@ -144,7 +143,7 @@ def segment(
     )
     image = draw_masks(image, masks)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    image = PIL.Image.fromarray(np.uint8(image)).convert("RGB")
+    image = PIL.Image.fromarray(image)
     return image
 
 
@@ -166,21 +165,21 @@ demo = gr.Interface(
             0.8,
             0.15,
             os.path.join(os.path.dirname(__file__), "examples/dog.jpg"),
-            "A dog only",
+            "A dog",
         ],
         [
             0.9,
             0.8,
-            0.1,
+            0.05,
             os.path.join(os.path.dirname(__file__), "examples/city.jpg"),
-            "A bridge on the water",
+            "water",
         ],
         [
             0.9,
             0.8,
             0.05,
             os.path.join(os.path.dirname(__file__), "examples/food.jpg"),
-            "",
+            "spoon",
         ],
         [
             0.9,
