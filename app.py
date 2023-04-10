@@ -63,6 +63,29 @@ def get_scores(crops: List[PIL.Image.Image], query: str) -> torch.Tensor:
     return similarity
 
 
+def crop_image(image: np.ndarray, mask: Dict[str, Any]) -> PIL.Image.Image:
+    x, y, w, h = mask["bbox"]
+    masked = image * np.expand_dims(mask["segmentation"], -1)
+    crop = masked[y : y + h, x : x + w]
+    if h > w:
+        top, bottom, left, right = 0, 0, (h - w) // 2, (h - w) // 2
+    else:
+        top, bottom, left, right = (w - h) // 2, (w - h) // 2, 0, 0
+    # padding
+    crop = cv2.copyMakeBorder(
+        crop,
+        top,
+        bottom,
+        left,
+        right,
+        cv2.BORDER_CONSTANT,
+        value=(0, 0, 0),
+    )
+    crop = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+    crop = PIL.Image.fromarray(crop)
+    return crop
+
+
 def filter_masks(
     image: np.ndarray,
     masks: List[Dict[str, Any]],
@@ -80,15 +103,8 @@ def filter_masks(
             or mask["stability_score"] < stability_score_threshold
         ):
             continue
-
         filtered_masks.append(mask)
-
-        x, y, w, h = mask["bbox"]
-        masked = image * np.expand_dims(mask["segmentation"], -1)
-        crop = masked[y: y + h, x: x + w]
-        crop = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
-        crop = PIL.Image.fromarray(crop)
-        cropped_masks.append(crop)
+        cropped_masks.append(crop_image(image, mask))
 
     if query and filtered_masks:
         scores = get_scores(cropped_masks, query)
@@ -170,9 +186,9 @@ demo = gr.Interface(
         [
             0.9,
             0.8,
-            0.05,
+            0.001,
             os.path.join(os.path.dirname(__file__), "examples/city.jpg"),
-            "water",
+            "building",
         ],
         [
             0.9,
