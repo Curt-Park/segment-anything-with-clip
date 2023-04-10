@@ -101,6 +101,7 @@ def filter_masks(
         if (
             mask["predicted_iou"] < predicted_iou_threshold
             or mask["stability_score"] < stability_score_threshold
+            or image.shape[:2] != mask["segmentation"].shape[:2]
         ):
             continue
         filtered_masks.append(mask)
