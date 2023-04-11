@@ -12,7 +12,8 @@ import PIL
 import torch
 from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 
-CHECKPOINT_PATH = "sam_vit_h_4b8939.pth"
+CHECKPOINT_PATH = os.path.join(os.path.expanduser("~"), ".cache", "SAM")
+CHECKPOINT_NAME = "sam_vit_h_4b8939.pth"
 CHECKPOINT_URL = "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth"
 MODEL_TYPE = "default"
 MAX_WIDTH = MAX_HEIGHT = 800
@@ -22,9 +23,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 @lru_cache
 def load_mask_generator() -> SamAutomaticMaskGenerator:
-    if not os.path.exists(os.path.join(".", CHECKPOINT_PATH)):
-        urllib.request.urlretrieve(CHECKPOINT_URL, CHECKPOINT_PATH)
-    sam = sam_model_registry[MODEL_TYPE](checkpoint=CHECKPOINT_PATH).to(device)
+    if not os.path.exists(CHECKPOINT_PATH):
+        os.makedirs(CHECKPOINT_PATH)
+    checkpoint = os.path.join(CHECKPOINT_PATH, CHECKPOINT_NAME)
+    if not os.path.exists(checkpoint):
+        urllib.request.urlretrieve(CHECKPOINT_URL, checkpoint)
+    sam = sam_model_registry[MODEL_TYPE](checkpoint=checkpoint).to(device)
     mask_generator = SamAutomaticMaskGenerator(sam)
     return mask_generator
 
