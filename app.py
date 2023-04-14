@@ -193,7 +193,7 @@ demo = gr.Interface(
         [
             0.9,
             0.8,
-            0.99,
+            0.998,
             os.path.join(os.path.dirname(__file__), "examples/food.jpg"),
             "strawberry",
         ],
@@ -203,6 +203,27 @@ demo = gr.Interface(
             0.75,
             os.path.join(os.path.dirname(__file__), "examples/horse.jpg"),
             "horse",
+        ],
+        [
+            0.9,
+            0.8,
+            0.99,
+            os.path.join(os.path.dirname(__file__), "examples/bears.jpg"),
+            "bear",
+        ],
+        [
+            0.9,
+            0.8,
+            0.99,
+            os.path.join(os.path.dirname(__file__), "examples/cats.jpg"),
+            "cat",
+        ],
+        [
+            0.9,
+            0.8,
+            0.99,
+            os.path.join(os.path.dirname(__file__), "examples/fish.jpg"),
+            "fish",
         ],
     ],
 )
