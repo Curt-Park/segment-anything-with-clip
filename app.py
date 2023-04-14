@@ -168,7 +168,7 @@ demo = gr.Interface(
     inputs=[
         gr.Slider(0, 1, value=0.9, label="predicted_iou_threshold"),
         gr.Slider(0, 1, value=0.8, label="stability_score_threshold"),
-        gr.Slider(0, 1, value=0.05, label="clip_threshold"),
+        gr.Slider(0, 1, value=0.85, label="clip_threshold"),
         gr.Image(type="filepath"),
         "text",
     ],
