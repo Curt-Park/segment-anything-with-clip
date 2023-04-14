@@ -16,8 +16,9 @@ CHECKPOINT_PATH = os.path.join(os.path.expanduser("~"), ".cache", "SAM")
 CHECKPOINT_NAME = "sam_vit_h_4b8939.pth"
 CHECKPOINT_URL = "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth"
 MODEL_TYPE = "default"
-MAX_WIDTH = MAX_HEIGHT = 800
-THRESHOLD = 0.05
+MAX_WIDTH = MAX_HEIGHT = 1024
+TOP_K_OBJ = 100
+THRESHOLD = 0.85
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -54,17 +55,13 @@ def adjust_image_size(image: np.ndarray) -> np.ndarray:
 
 
 @torch.no_grad()
-def get_scores(crops: List[PIL.Image.Image], query: str) -> torch.Tensor:
+def get_score(crop: PIL.Image.Image, texts: List[str]) -> torch.Tensor:
     model, preprocess = load_clip()
-    preprocessed = [preprocess(crop) for crop in crops]
-    preprocessed = torch.stack(preprocessed).to(device)
-    token = clip.tokenize(query).to(device)
-    img_features = model.encode_image(preprocessed)
-    txt_features = model.encode_text(token)
-    img_features /= img_features.norm(dim=-1, keepdim=True)
-    txt_features /= txt_features.norm(dim=-1, keepdim=True)
-    similarity = (100 * img_features @ txt_features.T).softmax(0)
-    return similarity
+    preprocessed = preprocess(crop).unsqueeze(0).to(device)
+    tokens = clip.tokenize(texts).to(device)
+    logits_per_image, _ = model(preprocessed, tokens)
+    similarity = logits_per_image.softmax(-1).cpu()
+    return similarity[0, 0]
 
 
 def crop_image(image: np.ndarray, mask: Dict[str, Any]) -> PIL.Image.Image:
@@ -85,9 +82,12 @@ def crop_image(image: np.ndarray, mask: Dict[str, Any]) -> PIL.Image.Image:
         cv2.BORDER_CONSTANT,
         value=(0, 0, 0),
     )
-    crop = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
     crop = PIL.Image.fromarray(crop)
     return crop
+
+
+def get_texts(query: str) -> List[str]:
+    return [f"a picture of {query}", "a picture of background"]
 
 
 def filter_masks(
@@ -98,26 +98,19 @@ def filter_masks(
     query: str,
     clip_threshold: float,
 ) -> List[Dict[str, Any]]:
-    cropped_masks: List[PIL.Image.Image] = []
     filtered_masks: List[Dict[str, Any]] = []
 
-    for mask in masks:
+    for mask in sorted(masks, key=lambda mask: mask["area"])[-TOP_K_OBJ:]:
         if (
             mask["predicted_iou"] < predicted_iou_threshold
             or mask["stability_score"] < stability_score_threshold
             or image.shape[:2] != mask["segmentation"].shape[:2]
+            or query
+            and get_score(crop_image(image, mask), get_texts(query)) < clip_threshold
         ):
             continue
-        filtered_masks.append(mask)
-        cropped_masks.append(crop_image(image, mask))
 
-    if query and filtered_masks:
-        scores = get_scores(cropped_masks, query)
-        filtered_masks = [
-            filtered_masks[i]
-            for i, score in enumerate(scores)
-            if score > clip_threshold
-        ]
+        filtered_masks.append(mask)
 
     return filtered_masks
 
@@ -139,7 +132,7 @@ def draw_masks(
         contours, _ = cv2.findContours(
             np.uint8(mask["segmentation"]), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
-        cv2.drawContours(image, contours, -1, (255, 0, 0), 2)
+        cv2.drawContours(image, contours, -1, (0, 0, 255), 2)
     return image
 
 
@@ -151,8 +144,11 @@ def segment(
     query: str,
 ) -> PIL.ImageFile.ImageFile:
     mask_generator = load_mask_generator()
+    image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
     # reduce the size to save gpu memory
-    image = adjust_image_size(cv2.imread(image_path))
+    image = adjust_image_size(image)
     masks = mask_generator.generate(image)
     masks = filter_masks(
         image,
@@ -163,7 +159,6 @@ def segment(
         clip_threshold,
     )
     image = draw_masks(image, masks)
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     image = PIL.Image.fromarray(image)
     return image
 
@@ -184,28 +179,28 @@ demo = gr.Interface(
         [
             0.9,
             0.8,
-            0.15,
+            0.99,
             os.path.join(os.path.dirname(__file__), "examples/dog.jpg"),
-            "A dog",
+            "dog",
         ],
         [
             0.9,
             0.8,
-            0.001,
+            0.75,
             os.path.join(os.path.dirname(__file__), "examples/city.jpg"),
             "building",
         ],
         [
             0.9,
             0.8,
-            0.05,
+            0.99,
             os.path.join(os.path.dirname(__file__), "examples/food.jpg"),
-            "spoon",
+            "strawberry",
         ],
         [
             0.9,
             0.8,
-            0.05,
+            0.75,
             os.path.join(os.path.dirname(__file__), "examples/horse.jpg"),
             "horse",
         ],
