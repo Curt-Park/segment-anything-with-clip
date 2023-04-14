@@ -12,11 +12,10 @@ Alternatively, I took the following steps:
 4. Calculate the similarity between image features and the query feature.
 ```python
 # How to get the similarity.
-img_features = clip.encode_image(preprocessed)
-txt_features = clip.encode_text(token)
-img_features /= img_features.norm(dim=-1, keepdim=True)
-txt_features /= txt_features.norm(dim=-1, keepdim=True)
-similarity = (100.0 * img_features @ txt_features.T).softmax(dim=0)
+preprocessed_img = preprocess(crop).unsqueeze(0)
+tokens = clip.tokenize(texts)
+logits_per_image, _ = model(preprocessed_img, tokens)
+similarity = logits_per_image.softmax(-1)
 ```
 
 ## How to run on local
@@ -32,8 +31,7 @@ make setup
 make run
 ```
 Open http://localhost:7860/
-<img width="1270" alt="" src="https://user-images.githubusercontent.com/14961526/230437084-79ef6e02-a254-421e-bd4c-32e87415c623.png">
-
+![](https://user-images.githubusercontent.com/14961526/232016821-dda192c1-1095-4086-adb8-e6a9f44b685f.png)
 
 ## References
 - https://github.com/facebookresearch/segment-anything
