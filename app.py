@@ -18,7 +18,6 @@ CHECKPOINT_URL = "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b89
 MODEL_TYPE = "default"
 MAX_WIDTH = MAX_HEIGHT = 1024
 TOP_K_OBJ = 100
-THRESHOLD = 0.85
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
