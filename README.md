@@ -33,6 +33,12 @@ make run
 Open http://localhost:7860/
 ![](https://user-images.githubusercontent.com/14961526/232016821-dda192c1-1095-4086-adb8-e6a9f44b685f.png)
 
+## Successive Works
+- [Fast Segment Everything](https://huggingface.co/spaces/Annotation-AI/fast-segment-everything): Re-implemented *Everything* algorithm in iterative manner that is better for CPU only environments. It shows comparable results to the original Everything within 1/5 number of inferences (e.g. 1024 vs 200), and it takes under 10 seconds to search for masks on a `CPU upgrade` instance (8 vCPU, 32GB RAM) of Huggingface space.
+- [Fast Segment Everything with Text Prompt](https://huggingface.co/spaces/Annotation-AI/fast-segment-everything-with-text-prompt): This example based on Fast-Segment-Everything provides a text prompt that generates an attention map for the area you want to focus on.
+- [Fast Segment Everything with Image Prompt](https://huggingface.co/spaces/Annotation-AI/fast-segment-everything-with-image-prompt): This example based on Fast-Segment-Everything provides an image prompt that generates an attention map for the area you want to focus on.
+- [Fast Segment Everything with Drawing Prompt](https://huggingface.co/spaces/Annotation-AI/fast-segment-everything-with-drawing-prompt): This example based on Fast-Segment-Everything provides a drawing prompt that generates an attention map for the area you want to focus on.
+
 ## References
 - https://github.com/facebookresearch/segment-anything
 - https://github.com/openai/CLIP
