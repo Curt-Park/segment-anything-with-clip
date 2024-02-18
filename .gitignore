@@ -1,5 +1,6 @@
 __pycache__
 flagged
+*.pt
 *.pth
 .ipynb_checkpoints
 *.DS_Store

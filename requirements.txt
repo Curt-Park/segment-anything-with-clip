@@ -1,6 +1,9 @@
-gradio==3.24.1
-opencv-python==4.7.0.72
-pycocotools==2.0.6
-matplotlib==3.7.1
+gradio==4.19.1
+opencv-python==4.9.0.80
+pycocotools==2.0.7
+matplotlib==3.7.5
+timm==0.9.12
+onnx==1.15.0
+onnxsim==0.4.35
 git+https://github.com/facebookresearch/segment-anything.git
 git+https://github.com/openai/CLIP.git

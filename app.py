@@ -10,26 +10,24 @@ import gradio as gr
 import numpy as np
 import PIL
 import torch
-from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 
-CHECKPOINT_PATH = os.path.join(os.path.expanduser("~"), ".cache", "SAM")
-CHECKPOINT_NAME = "sam_vit_h_4b8939.pth"
-CHECKPOINT_URL = "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth"
-MODEL_TYPE = "default"
+from efficientvit.models.efficientvit.sam import EfficientViTSamAutomaticMaskGenerator
+from efficientvit.sam_model_zoo import create_sam_model
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MAX_WIDTH = MAX_HEIGHT = 1024
 TOP_K_OBJ = 100
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+# Download model weights.
+os.system("make model")
 
 
 @lru_cache
-def load_mask_generator() -> SamAutomaticMaskGenerator:
-    if not os.path.exists(CHECKPOINT_PATH):
-        os.makedirs(CHECKPOINT_PATH)
-    checkpoint = os.path.join(CHECKPOINT_PATH, CHECKPOINT_NAME)
-    if not os.path.exists(checkpoint):
-        urllib.request.urlretrieve(CHECKPOINT_URL, checkpoint)
-    sam = sam_model_registry[MODEL_TYPE](checkpoint=checkpoint).to(device)
-    mask_generator = SamAutomaticMaskGenerator(sam)
+def load_mask_generator() -> EfficientViTSamAutomaticMaskGenerator:
+    efficientvit_sam = create_sam_model(name="xl1", weight_url="xl1.pt")
+    efficientvit_sam = efficientvit_sam.to(device).eval()
+    mask_generator = EfficientViTSamAutomaticMaskGenerator(efficientvit_sam)
     return mask_generator
 
 
@@ -64,7 +62,7 @@ def get_score(crop: PIL.Image.Image, texts: List[str]) -> torch.Tensor:
 
 
 def crop_image(image: np.ndarray, mask: Dict[str, Any]) -> PIL.Image.Image:
-    x, y, w, h = mask["bbox"]
+    x, y, w, h = (int(val) for val in mask["bbox"])
     masked = image * np.expand_dims(mask["segmentation"], -1)
     crop = masked[y : y + h, x : x + w]
     if h > w:
@@ -149,6 +147,7 @@ def segment(
     # reduce the size to save gpu memory
     image = adjust_image_size(image)
     masks = mask_generator.generate(image)
+    print(f"Generated {len(masks)} masks")
     masks = filter_masks(
         image,
         masks,
@@ -157,6 +156,7 @@ def segment(
         query,
         clip_threshold,
     )
+    print(f"Remained {len(masks)} after filtering")
     image = draw_masks(image, masks)
     image = PIL.Image.fromarray(image)
     return image
@@ -227,5 +227,5 @@ demo = gr.Interface(
     ],
 )
 
-if __name__ == "__main__":
-    demo.launch()
+
+demo.launch()
