@@ -1,231 +1,240 @@
 import os
-import urllib
+import time
 from functools import lru_cache
-from random import randint
-from typing import Any, Callable, Dict, List, Tuple
 
-import clip
 import cv2
 import gradio as gr
 import numpy as np
-import PIL
 import torch
 
-from efficientvit.models.efficientvit.sam import EfficientViTSamAutomaticMaskGenerator
-from efficientvit.sam_model_zoo import create_sam_model
+from transformers import CLIPSegForImageSegmentation, CLIPSegProcessor
+from PIL import Image
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-MAX_WIDTH = MAX_HEIGHT = 1024
-TOP_K_OBJ = 100
+from efficientvit.sam_model_zoo import create_sam_model
+from efficientvit.models.efficientvit.sam import EfficientViTSamPredictor
+from sam import get_preprocess_shape, run_everything
 
 
 # Download model weights.
 os.system("make model")
 
 
+IMAGE_SIZE = 1024
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 @lru_cache
-def load_mask_generator() -> EfficientViTSamAutomaticMaskGenerator:
+def load_sam_predictor() -> EfficientViTSamPredictor:
     efficientvit_sam = create_sam_model(name="xl1", weight_url="xl1.pt")
     efficientvit_sam = efficientvit_sam.to(device).eval()
-    mask_generator = EfficientViTSamAutomaticMaskGenerator(efficientvit_sam)
-    return mask_generator
+    mask_predictor = EfficientViTSamPredictor(efficientvit_sam)
+    return mask_predictor
 
 
 @lru_cache
-def load_clip(
-    name: str = "ViT-B/32",
-) -> Tuple[torch.nn.Module, Callable[[PIL.Image.Image], torch.Tensor]]:
-    model, preprocess = clip.load(name, device=device)
-    return model.to(device), preprocess
-
-
-def adjust_image_size(image: np.ndarray) -> np.ndarray:
-    height, width = image.shape[:2]
-    if height > width:
-        if height > MAX_HEIGHT:
-            height, width = MAX_HEIGHT, int(MAX_HEIGHT / height * width)
-    else:
-        if width > MAX_WIDTH:
-            height, width = int(MAX_WIDTH / width * height), MAX_WIDTH
-    image = cv2.resize(image, (width, height))
-    return image
+def load_clipseg(
+    model_name: str = "CIDAS/clipseg-rd64-refined",
+) -> tuple[CLIPSegProcessor, CLIPSegForImageSegmentation]:
+    processor = CLIPSegProcessor.from_pretrained(model_name)
+    model = CLIPSegForImageSegmentation.from_pretrained(model_name).to(device)
+    return processor, model
 
 
 @torch.no_grad()
-def get_score(crop: PIL.Image.Image, texts: List[str]) -> torch.Tensor:
-    model, preprocess = load_clip()
-    preprocessed = preprocess(crop).unsqueeze(0).to(device)
-    tokens = clip.tokenize(texts).to(device)
-    logits_per_image, _ = model(preprocessed, tokens)
-    similarity = logits_per_image.softmax(-1).cpu()
-    return similarity[0, 0]
-
-
-def crop_image(image: np.ndarray, mask: Dict[str, Any]) -> PIL.Image.Image:
-    x, y, w, h = (int(val) for val in mask["bbox"])
-    masked = image * np.expand_dims(mask["segmentation"], -1)
-    crop = masked[y : y + h, x : x + w]
-    if h > w:
-        top, bottom, left, right = 0, 0, (h - w) // 2, (h - w) // 2
-    else:
-        top, bottom, left, right = (w - h) // 2, (w - h) // 2, 0, 0
-    # padding
-    crop = cv2.copyMakeBorder(
-        crop,
-        top,
-        bottom,
-        left,
-        right,
-        cv2.BORDER_CONSTANT,
-        value=(0, 0, 0),
-    )
-    crop = PIL.Image.fromarray(crop)
-    return crop
-
-
-def get_texts(query: str) -> List[str]:
-    return [f"a picture of {query}", "a picture of background"]
-
-
-def filter_masks(
-    image: np.ndarray,
-    masks: List[Dict[str, Any]],
-    predicted_iou_threshold: float,
-    stability_score_threshold: float,
-    query: str,
-    clip_threshold: float,
-) -> List[Dict[str, Any]]:
-    filtered_masks: List[Dict[str, Any]] = []
-
-    for mask in sorted(masks, key=lambda mask: mask["area"])[-TOP_K_OBJ:]:
-        if (
-            mask["predicted_iou"] < predicted_iou_threshold
-            or mask["stability_score"] < stability_score_threshold
-            or image.shape[:2] != mask["segmentation"].shape[:2]
-            or query
-            and get_score(crop_image(image, mask), get_texts(query)) < clip_threshold
-        ):
-            continue
-
-        filtered_masks.append(mask)
-
-    return filtered_masks
+def get_attention_map(
+    image: np.ndarray, query: str, shape: tuple[int, int], attention_threshold: float
+) -> np.ndarray:
+    processor, model = load_clipseg()
+    image = Image.fromarray(image)
+    inputs = processor(
+        text=query, images=image, padding="max_length", return_tensors="pt"
+    ).to(device)
+    outputs = model(**inputs)
+    attention_map = torch.sigmoid(outputs.logits)
+    attention_map = attention_map.detach().cpu().numpy()
+    attention_map = (attention_map > attention_threshold).astype(np.uint8) * 255
+    attention_map = cv2.resize(attention_map, dsize=shape[::-1])
+    return attention_map
 
 
 def draw_masks(
-    image: np.ndarray, masks: List[np.ndarray], alpha: float = 0.7
+    image: np.ndarray,
+    masks: np.ndarray,
+    progress=gr.Progress(),
+    alpha: float = 0.4,
 ) -> np.ndarray:
-    for mask in masks:
-        color = [randint(127, 255) for _ in range(3)]
+    b, h, w = masks.shape
+    overlay = np.ones((h, w, 3))
 
-        # draw mask overlay
-        colored_mask = np.expand_dims(mask["segmentation"], 0).repeat(3, axis=0)
-        colored_mask = np.moveaxis(colored_mask, 0, -1)
-        masked = np.ma.MaskedArray(image, mask=colored_mask, fill_value=color)
-        image_overlay = masked.filled()
-        image = cv2.addWeighted(image, 1 - alpha, image_overlay, alpha, 0)
-
-        # draw contour
-        contours, _ = cv2.findContours(
-            np.uint8(mask["segmentation"]), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-        )
-        cv2.drawContours(image, contours, -1, (0, 0, 255), 2)
+    progress(0, desc="Starting drawing")
+    for i in progress.tqdm(range(b), desc="Drawing masks"):
+        progress(i / b)
+        mask, color = masks[i], np.random.random((1, 1, 3))
+        overlay = overlay * (1 - mask[..., None]) + color * mask[..., None]
+    image = (image * alpha + overlay * 255 * (1 - alpha)).astype(np.uint8)
     return image
 
 
 def segment(
-    predicted_iou_threshold: float,
-    stability_score_threshold: float,
-    clip_threshold: float,
-    image_path: str,
+    image: str,
     query: str,
-) -> PIL.ImageFile.ImageFile:
-    mask_generator = load_mask_generator()
-    image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    n_click_iterations: int,
+    mask_size: int,
+    attention_threshold: float,
+    initial_object_size: float,
+    overlap_score_threshold: float,
+    predicted_iou_threshold: float,
+    masked_area: float,
+    progress=gr.Progress(),
+) -> tuple[np.ndarray, np.ndarray, str, str]:
+    # Read the image and mask.
+    image = cv2.imread(image, cv2.IMREAD_COLOR)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-    # reduce the size to save gpu memory
-    image = adjust_image_size(image)
-    masks = mask_generator.generate(image)
-    print(f"Generated {len(masks)} masks")
-    masks = filter_masks(
-        image,
-        masks,
+    # Resize the image.
+    image_shape = get_preprocess_shape(image.shape[0], image.shape[1], IMAGE_SIZE)
+    image = cv2.resize(image, dsize=image_shape[::-1])
+    # Get the mask shape
+    mask_shape = get_preprocess_shape(image.shape[0], image.shape[1], mask_size)
+
+    # get the image embeddings
+    sam_predictor = load_sam_predictor()
+    sam_predictor.set_image(image)
+    image_embedding = sam_predictor.features.cpu().numpy()
+    # image_embedding = image_embedding.reshape(1, 256, 64, 64)
+
+    # Get an attention map
+    start = time.perf_counter()
+    if query:
+        attention = get_attention_map(image, query, mask_shape, attention_threshold)
+    else:
+        attention = np.ones(mask_shape, dtype=np.uint8) * 255
+    masks = run_everything(
+        image_embedding,
+        attention,
+        image_shape,
+        mask_shape,
+        0.02,  # border ratio
+        int(n_click_iterations),
+        initial_object_size,
+        overlap_score_threshold,
         predicted_iou_threshold,
-        stability_score_threshold,
-        query,
-        clip_threshold,
+        0.0,  # mask_threshold
+        masked_area,
+        1e-7,  # eps
+        progress,
     )
-    print(f"Remained {len(masks)} after filtering")
-    image = draw_masks(image, masks)
-    image = PIL.Image.fromarray(image)
-    return image
+    eta = time.perf_counter() - start
+    eta_text = f"Searching Time: {eta:.2f} seconds"
+    mask_text = f"Found {masks.shape[0] - 1} masks"
+
+    image = draw_masks(image, masks, progress)
+
+    return image, attention, eta_text, mask_text
 
 
 demo = gr.Interface(
     fn=segment,
     inputs=[
-        gr.Slider(0, 1, value=0.9, label="predicted_iou_threshold"),
-        gr.Slider(0, 1, value=0.8, label="stability_score_threshold"),
-        gr.Slider(0, 1, value=0.85, label="clip_threshold"),
         gr.Image(type="filepath"),
-        "text",
+        gr.Text("", label="Object to search"),
+        gr.Slider(1, 500, value=200, label="Iteration num. (Larger for more objects)"),
+        gr.Slider(256, 1024, value=256, label="Mask size (Larger for more details)"),
+        gr.Slider(0, 1, value=0.2, label="Attention threshold (less for less concise)"),
+        gr.Slider(0, 1, value=0.2, label="Initial object size to search (Small first)"),
+        gr.Slider(0, 1, value=0.5, label="Overlap score bound (Prevent overlaps)"),
+        gr.Slider(0, 1, value=0.8, label="IoU prediction threshold (Confidence)"),
+        gr.Slider(0, 1, value=0.95, label="Target masked area (Early stop)"),
     ],
-    outputs="image",
+    outputs=[
+        gr.Image(type="numpy"),
+        gr.Image(type="numpy"),
+        gr.Label(label="ETA"),
+        gr.Label(label="Masks"),
+    ],
     allow_flagging="never",
-    title="Segment Anything with CLIP",
+    title="Segment Anything with CLIPSeg",
     examples=[
         [
-            0.9,
-            0.8,
-            0.99,
             os.path.join(os.path.dirname(__file__), "examples/dog.jpg"),
             "dog",
+            50,
+            256,
+            0.6,
+            0.2,
+            0.5,
+            0.8,
+            0.95,
         ],
         [
-            0.9,
-            0.8,
-            0.75,
             os.path.join(os.path.dirname(__file__), "examples/city.jpg"),
             "building",
+            50,
+            256,
+            0.6,
+            0.2,
+            0.5,
+            0.8,
+            0.95,
         ],
         [
-            0.9,
-            0.8,
-            0.998,
             os.path.join(os.path.dirname(__file__), "examples/food.jpg"),
             "strawberry",
+            50,
+            256,
+            0.6,
+            0.2,
+            0.5,
+            0.8,
+            0.95,
         ],
         [
-            0.9,
-            0.8,
-            0.75,
             os.path.join(os.path.dirname(__file__), "examples/horse.jpg"),
             "horse",
+            50,
+            256,
+            0.6,
+            0.2,
+            0.5,
+            0.8,
+            0.95,
         ],
         [
-            0.9,
-            0.8,
-            0.99,
             os.path.join(os.path.dirname(__file__), "examples/bears.jpg"),
             "bear",
+            50,
+            256,
+            0.6,
+            0.2,
+            0.5,
+            0.8,
+            0.95,
         ],
         [
-            0.9,
-            0.8,
-            0.99,
             os.path.join(os.path.dirname(__file__), "examples/cats.jpg"),
             "cat",
+            50,
+            256,
+            0.6,
+            0.2,
+            0.5,
+            0.8,
+            0.95,
         ],
         [
-            0.9,
-            0.8,
-            0.99,
             os.path.join(os.path.dirname(__file__), "examples/fish.jpg"),
             "fish",
+            50,
+            256,
+            0.6,
+            0.2,
+            0.5,
+            0.8,
+            0.95,
         ],
     ],
 )
 
 
+load_clipseg()
 demo.launch()
