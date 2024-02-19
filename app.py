@@ -6,14 +6,12 @@ import cv2
 import gradio as gr
 import numpy as np
 import torch
-
-from transformers import CLIPSegForImageSegmentation, CLIPSegProcessor
 from PIL import Image
+from transformers import CLIPSegForImageSegmentation, CLIPSegProcessor
 
-from efficientvit.sam_model_zoo import create_sam_model
 from efficientvit.models.efficientvit.sam import EfficientViTSamPredictor
+from efficientvit.sam_model_zoo import create_sam_model
 from sam import get_preprocess_shape, run_everything
-
 
 # Download model weights.
 os.system("make model")

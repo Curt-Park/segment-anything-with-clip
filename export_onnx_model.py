@@ -8,13 +8,13 @@
 # LICENSE file in the root directory of this source tree.
 
 
-import torch
-
-from efficientvit.sam_model_zoo import create_sam_model
-from segment_anything.utils.onnx import SamOnnxModel
-
 import argparse
 import warnings
+
+import torch
+from segment_anything.utils.onnx import SamOnnxModel
+
+from efficientvit.sam_model_zoo import create_sam_model
 
 try:
     import onnxruntime  # type: ignore
@@ -28,7 +28,10 @@ parser = argparse.ArgumentParser(
 )
 
 parser.add_argument(
-    "--checkpoint", type=str, required=True, help="The path to the SAM model checkpoint."
+    "--checkpoint",
+    type=str,
+    required=True,
+    help="The path to the SAM model checkpoint.",
 )
 
 parser.add_argument(
@@ -126,7 +129,9 @@ def run_export(
     mask_input_size = [4 * x for x in embed_size]
     dummy_inputs = {
         "image_embeddings": torch.randn(1, embed_dim, *embed_size, dtype=torch.float),
-        "point_coords": torch.randint(low=0, high=1024, size=(1, 5, 2), dtype=torch.float),
+        "point_coords": torch.randint(
+            low=0, high=1024, size=(1, 5, 2), dtype=torch.float
+        ),
         "point_labels": torch.randint(low=0, high=4, size=(1, 5), dtype=torch.float),
         "mask_input": torch.randn(1, 1, *mask_input_size, dtype=torch.float),
         "has_mask_input": torch.tensor([1], dtype=torch.float),
