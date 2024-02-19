@@ -59,7 +59,7 @@ def draw_masks(
     image: np.ndarray,
     masks: np.ndarray,
     progress=gr.Progress(),
-    alpha: float = 0.4,
+    alpha: float = 0.3,
 ) -> np.ndarray:
     b, h, w = masks.shape
     overlay = np.ones((h, w, 3))
@@ -223,11 +223,11 @@ demo = gr.Interface(
             os.path.join(os.path.dirname(__file__), "examples/fish.jpg"),
             "fish",
             50,
-            256,
-            0.6,
+            512,
+            0.35,
             0.2,
             0.5,
-            0.8,
+            0.65,
             0.95,
         ],
     ],
